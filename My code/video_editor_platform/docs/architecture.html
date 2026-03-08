@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Generation Pipeline — Architecture</title>
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0d1117;
+      --bg-card:     #161b22;
+      --bg-card2:    #1a2030;
+      --border:      #30363d;
+      --gold:        #DAA520;
+      --gold-light:  #FFD700;
+      --gold-dim:    #a07800;
+      --text:        #e6edf3;
+      --text-muted:  #8b949e;
+      --accent-blue: #58a6ff;
+      --accent-green:#3fb950;
+      --accent-red:  #f85149;
+      --accent-purple:#bc8cff;
+      --accent-teal: #39d353;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    a { color: var(--gold); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code, .mono {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 12px;
+      background: #0d1117;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: var(--gold-light);
+    }
+
+    h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.01em; }
+
+    /* ── Layout ───────────────────────────────────────────────────── */
+    .page-wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    header {
+      padding: 48px 0 32px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+      position: relative;
+    }
+    header::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(218,165,32,.12), transparent);
+      pointer-events: none;
+    }
+    .header-badge {
+      display: inline-block;
+      background: rgba(218,165,32,.15);
+      border: 1px solid var(--gold-dim);
+      color: var(--gold-light);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+    header h1 {
+      font-size: 2.2rem;
+      background: linear-gradient(135deg, #FFD700, #DAA520 60%, #a07800);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+    header p {
+      color: var(--text-muted);
+      font-size: 15px;
+      max-width: 680px;
+    }
+
+    /* ── Nav / TOC ────────────────────────────────────────────────── */
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 48px;
+    }
+    .toc a {
+      color: var(--text-muted);
+      font-size: 13px;
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: all .2s;
+    }
+    .toc a:hover {
+      border-color: var(--gold-dim);
+      color: var(--gold-light);
+      text-decoration: none;
+      background: rgba(218,165,32,.06);
+    }
+
+    /* ── Section titles ───────────────────────────────────────────── */
+    .section {
+      margin-bottom: 56px;
+    }
+    .section-title {
+      font-size: 1.15rem;
+      color: var(--gold-light);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: rgba(218,165,32,.18);
+      border: 1px solid var(--gold-dim);
+      color: var(--gold-light);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* ── Cards ────────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .card h4 {
+      font-size: 13px;
+      color: var(--gold-light);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .card p, .card li {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+    .card ul { padding-left: 18px; }
+    .card ul li + li { margin-top: 4px; }
+
+    /* ── Pipeline Flow ────────────────────────────────────────────── */
+    .pipeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+    }
+
+    .pipeline-step {
+      display: flex;
+      gap: 0;
+      position: relative;
+    }
+
+    .pipeline-step:not(:last-child) .step-connector {
+      position: absolute;
+      left: 30px;
+      top: 56px;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--gold-dim), rgba(218,165,32,.2));
+      z-index: 0;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 16px;
+      position: relative;
+      z-index: 1;
+    }
+    .step-circle {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(218,165,32,.25), rgba(218,165,32,.08));
+      border: 2px solid var(--gold-dim);
+      color: var(--gold-light);
+      font-weight: 700;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-body {
+      flex: 1;
+      padding: 14px 0 28px 16px;
+    }
+    .step-body h3 {
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .step-body p {
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 780px;
+    }
+    .step-body .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .chip {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: .03em;
+      white-space: nowrap;
+    }
+    .chip-blue   { background: rgba(88,166,255,.12); border: 1px solid rgba(88,166,255,.35); color: var(--accent-blue); }
+    .chip-green  { background: rgba(63,185,80,.12);  border: 1px solid rgba(63,185,80,.35);  color: var(--accent-green);}
+    .chip-gold   { background: rgba(218,165,32,.12); border: 1px solid rgba(218,165,32,.35); color: var(--gold-light); }
+    .chip-purple { background: rgba(188,140,255,.12);border: 1px solid rgba(188,140,255,.35);color: var(--accent-purple);}
+    .chip-red    { background: rgba(248,81,73,.10);  border: 1px solid rgba(248,81,73,.35);  color: var(--accent-red); }
+
+    .arrow-sub {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,.03);
+      border-left: 3px solid var(--border);
+      border-radius: 0 6px 6px 0;
+    }
+    .arrow-sub .sub-icon { color: var(--gold-dim); font-size: 16px; }
+    .arrow-sub p { font-size: 12px; color: var(--text-muted); }
+
+    /* ── Frame Layout ─────────────────────────────────────────────── */
+    .frame-diagram {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .frame-visual {
+      flex-shrink: 0;
+      width: 155px;
+    }
+    .frame-phone {
+      border: 3px solid #444;
+      border-radius: 18px;
+      overflow: hidden;
+      background: #111;
+      position: relative;
+    }
+    .zone {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      position: relative;
+    }
+    .zone-top {
+      height: 52px;
+      background: linear-gradient(108deg, #0a0a1a 0%, #15152e 40%, #1a0a05 100%);
+      border-bottom: 2px solid var(--gold-dim);
+      color: var(--gold-light);
+      font-size: 9px;
+    }
+    .zone-product {
+      height: 196px;
+      background: linear-gradient(160deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      color: rgba(255,255,255,.5);
+      font-size: 10px;
+    }
+    .zone-bottom {
+      height: 52px;
+      background: linear-gradient(108deg, #111111 0%, #1a1a1a 60%, #050505 100%);
+      border-top: 2px solid var(--gold-dim);
+      color: var(--gold-light);
+      font-size: 9px;
+    }
+    .badge-dot {
+      position: absolute;
+      right: 14px;
+      top: -14px;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #FFD700, #DAA520 60%, #8B4513);
+      border: 2px solid #8B4513;
+      font-size: 7px;
+      font-weight: 900;
+      color: #1a0a00;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .frame-legend {
+      flex: 1;
+      min-width: 280px;
+    }
+    .legend-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+    .legend-row:last-child { border-bottom: none; }
+    .legend-swatch {
+      flex-shrink: 0;
+      width: 10px;
+      margin-top: 5px;
+      border-radius: 2px;
+    }
+    .legend-swatch.top    { background: #15152e; border: 1px solid var(--gold-dim); height: 40px; }
+    .legend-swatch.mid    { background: #16213e; border: 1px solid #30363d; height: 72px; }
+    .legend-swatch.bot    { background: #1a1a1a; border: 1px solid var(--gold-dim); height: 40px; }
+    .legend-swatch.badge  { background: var(--gold); border-radius: 50%;   height: 18px; width: 18px; }
+    .legend-text h4 { font-size: 13px; color: var(--text); margin-bottom: 4px; }
+    .legend-text p  { font-size: 12px; color: var(--text-muted); }
+
+    /* ── Services table ───────────────────────────────────────────── */
+    .svc-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .svc-table th {
+      text-align: left;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .svc-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      vertical-align: top;
+    }
+    .svc-table tr:last-child td { border-bottom: none; }
+    .svc-table tr:hover td { background: rgba(255,255,255,.02); }
+    .svc-name { color: var(--accent-blue); font-family: monospace; font-size: 12px; }
+    .svc-file { color: var(--text-muted); font-size: 11px; }
+    .svc-desc { font-size: 12px; color: var(--text); }
+    .svc-out  { font-size: 11px; color: var(--text-muted); }
+
+    /* ── File Tree ────────────────────────────────────────────────── */
+    .tree {
+      font-family: monospace;
+      font-size: 12.5px;
+      line-height: 1.9;
+      color: var(--text);
+    }
+    .tree .dir  { color: var(--accent-blue); font-weight: 600; }
+    .tree .main { color: var(--gold-light); font-weight: 600; }
+    .tree .svc  { color: var(--accent-green); }
+    .tree .cfg  { color: var(--accent-purple); }
+    .tree .doc  { color: var(--text-muted); }
+    .tree .comment { color: var(--text-muted); margin-left: 8px; font-style: italic; font-size: 11px; }
+
+    /* ── Data Flow ────────────────────────────────────────────────── */
+    .flow-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .flow-table th {
+      text-align: left;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .flow-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      font-size: 12.5px;
+      vertical-align: top;
+    }
+    .flow-table tr:last-child td { border-bottom: none; }
+    .flow-table tr:hover td { background: rgba(255,255,255,.02); }
+
+    /* ── Config ───────────────────────────────────────────────────── */
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      overflow-x: auto;
+    }
+    .code-block pre {
+      font-family: monospace;
+      font-size: 12.5px;
+      color: var(--text);
+      line-height: 1.7;
+    }
+    .code-block .key   { color: var(--accent-blue); }
+    .code-block .val   { color: #a5d6ff; }
+    .code-block .str   { color: #7ce38b; }
+    .code-block .cmt   { color: var(--text-muted); }
+
+    .info-box {
+      background: rgba(88,166,255,.06);
+      border: 1px solid rgba(88,166,255,.25);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .info-box strong { color: var(--accent-blue); }
+
+    .warn-box {
+      background: rgba(218,165,32,.07);
+      border: 1px solid rgba(218,165,32,.28);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .warn-box strong { color: var(--gold-light); }
+
+    /* ── CLI section ──────────────────────────────────────────────── */
+    .cli-block {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      overflow-x: auto;
+    }
+    .cli-block pre {
+      font-family: monospace;
+      font-size: 12.5px;
+      line-height: 1.8;
+    }
+    .cli-block .prompt { color: var(--text-muted); user-select: none; }
+    .cli-block .cmd    { color: var(--accent-green); }
+    .cli-block .flag   { color: var(--accent-blue); }
+    .cli-block .val    { color: var(--gold-light); }
+    .cli-block .cmt    { color: var(--text-muted); }
+
+    /* ── Footer ───────────────────────────────────────────────────── */
+    footer {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* ── Responsive ───────────────────────────────────────────────── */
+    @media (max-width: 680px) {
+      header h1 { font-size: 1.6rem; }
+      .frame-diagram { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- ───────────────────── HEADER ───────────────────── -->
+  <header>
+    <div class="header-badge">Architecture</div>
+    <h1>Video Generation Pipeline</h1>
+    <p>
+      End-to-end system for creating 9:16 carousel promotion videos from multiple product images
+      using AI-generated SDXL banners, LLM-driven copy, and OpenCV compositing.
+    </p>
+  </header>
+
+  <!-- TOC -->
+  <nav class="toc" aria-label="Table of contents">
+    <a href="#overview">1 · Overview</a>
+    <a href="#pipeline">2 · Pipeline Steps</a>
+    <a href="#frame">3 · Frame Layout</a>
+    <a href="#services">4 · Service Modules</a>
+    <a href="#dataflow">5 · Data Flow</a>
+    <a href="#filetree">6 · File Tree</a>
+    <a href="#config">7 · Configuration</a>
+    <a href="#cli">8 · CLI Reference</a>
+  </nav>
+
+
+  <!-- ───────────────────── 1. OVERVIEW ───────────────────── -->
+  <section class="section" id="overview">
+    <div class="section-title"><span class="num">1</span> System Overview</div>
+    <div class="card-grid">
+
+      <div class="card">
+        <h4>🎯 Purpose</h4>
+        <p>Takes N product images + a plain-text promotional description, generates two
+        distinct AI banner backgrounds (top header + bottom footer) via SDXL, composites
+        them with LLM-written copy, and encodes everything into a smooth-transition
+        carousel MP4 optimised for social media (Instagram Reels / TikTok).</p>
+      </div>
+
+      <div class="card">
+        <h4>⚡ Key Design Decisions</h4>
+        <ul>
+          <li>Banners generated <em>once</em> per run — reused on every frame</li>
+          <li>Product images shown <em>clean</em> — no per-image AI editing</li>
+          <li>Slide transition moves <em>only</em> the product zone; banners stay pinned</li>
+          <li>LLM copy-gen has lightweight regex fallback (no hard dependency)</li>
+          <li>All AI inference is <em>remote</em> — no GPU required locally</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>🔌 External Dependencies</h4>
+        <ul>
+          <li><strong style="color:var(--accent-blue)">HF Router</strong> — <code>router.huggingface.co</code> routes SDXL images</li>
+          <li><strong style="color:var(--accent-green)">InferenceClient</strong> — <code>huggingface_hub</code> manages auth + routing</li>
+          <li><strong style="color:var(--gold-light)">HF Chat API</strong> — <code>/v1/chat/completions</code> for LLM copy (optional)</li>
+          <li><strong style="color:var(--accent-purple)">OpenCV</strong> — video encoding (<code>mp4v</code> codec)</li>
+          <li><strong style="color:var(--text-muted)">Pillow</strong> — text overlays, badge compositing</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>📐 Output Spec</h4>
+        <ul>
+          <li>Resolution: <code>1080 × 1920</code> (9:16 portrait)</li>
+          <li>Codec: <code>mp4v</code> &nbsp;/&nbsp; Container: <code>.mp4</code></li>
+          <li>Frame rate: <code>30 fps</code> (configurable)</li>
+          <li>Hold time: <code>4 s</code> per image (configurable)</li>
+          <li>Transition: <code>25 frames</code> smoothstep slide-left</li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ───────────────────── 2. PIPELINE ───────────────────── -->
+  <section class="section" id="pipeline">
+    <div class="section-title"><span class="num">2</span> Pipeline Steps</div>
+
+    <div class="card" style="padding:28px 28px 8px">
+      <div class="pipeline">
+
+        <!-- Step 1 -->
+        <div class="pipeline-step">
+          <div class="step-connector"></div>
+          <div class="step-num"><div class="step-circle">1</div></div>
+          <div class="step-body">
+            <h3>
+              Description Parsing
+              <span class="chip chip-green">DescriptionBasedIconAgent</span>
+              <span class="chip chip-blue">BannerContentAgent</span>
+            </h3>
+            <p>
+              Two agents operate on the plain-text description in parallel:<br><br>
+              <strong>DescriptionBasedIconAgent</strong> uses regex to extract the discount
+              percentage, classify product type (motorcycle / fashion / electronics / sport),
+              and select a colour scheme + template.<br><br>
+              <strong>BannerContentAgent</strong> calls a HuggingFace LLM
+              (<code>Mistral-7B</code> → <code>Qwen2.5-1.5B</code> → <code>SmolLM2-1.7B</code>)
+              via <code>/v1/chat/completions</code> on the HF Router to produce structured
+              promotional copy. Falls back to intelligent phrase extraction if all LLM calls fail.
+            </p>
+            <div class="chips">
+              <span class="chip chip-gold">Output: headline, tagline, offer_points[3], badge_label</span>
+              <span class="chip chip-gold">Output: discount_percent, product_type, color_scheme</span>
+            </div>
+            <div class="arrow-sub">
+              <span class="sub-icon">↳</span>
+              <p>LLM fallback chain: Mistral-7B → Qwen2.5-1.5B → SmolLM2-1.7B → regex extraction</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="pipeline-step">
+          <div class="step-connector"></div>
+          <div class="step-num"><div class="step-circle">2</div></div>
+          <div class="step-body">
+            <h3>
+              Image Loading
+              <span class="chip chip-purple">OpenCV cv2.imread</span>
+            </h3>
+            <p>
+              Each input path is loaded as a BGR NumPy array via <code>cv2.imread()</code>.
+              Invalid paths are warned and skipped. At least one valid image is required to proceed.
+            </p>
+            <div class="chips">
+              <span class="chip chip-gold">Output: List[np.ndarray BGR]</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="pipeline-step">
+          <div class="step-connector"></div>
+          <div class="step-num"><div class="step-circle">3</div></div>
+          <div class="step-body">
+            <h3>
+              AI Banner Generation — Top
+              <span class="chip chip-blue">RemoteInferenceGenerator</span>
+              <span class="chip chip-gold">SDXL</span>
+            </h3>
+            <p>
+              <code>ImageGeneratorFactory.create(backend)</code> instantiates
+              <code>RemoteInferenceGenerator</code> with <code>stabilityai/stable-diffusion-xl-base-1.0</code>.
+              The prompt emphasises a <em>dark navy-to-black gradient</em>, thin gold geometric
+              border lines, carbon-fibre corner texture, and a completely empty centre so
+              the PIL text layer has a clean canvas. Output is <code>1080 × 345 px</code> PIL Image.
+            </p>
+            <div class="chips">
+              <span class="chip chip-gold">Prompt style: "dark navy gradient, gold border lines, empty centre"</span>
+              <span class="chip chip-gold">Output: PIL Image (1080 × banner_height)</span>
+            </div>
+            <div class="arrow-sub">
+              <span class="sub-icon">↳</span>
+              <p>Fallback: programmatic dark gradient via NumPy if SDXL call fails</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3b -->
+        <div class="pipeline-step">
+          <div class="step-connector"></div>
+          <div class="step-num"><div class="step-circle">3b</div></div>
+          <div class="step-body">
+            <h3>
+              AI Banner Generation — Bottom
+              <span class="chip chip-blue">RemoteInferenceGenerator</span>
+              <span class="chip chip-gold">SDXL</span>
+            </h3>
+            <p>
+              Second independent SDXL call with a distinct prompt: <em>deep charcoal-to-black
+              gradient</em>, thin gold accent lines along top edge only, dark leather / carbon-fibre
+              texture. Same size as top banner. Both calls share the same generator instance.
+            </p>
+            <div class="chips">
+              <span class="chip chip-gold">Prompt style: "charcoal gradient, gold top-edge lines, leather texture"</span>
+              <span class="chip chip-gold">Output: PIL Image (1080 × bottom_height)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="pipeline-step">
+          <div class="step-connector"></div>
+          <div class="step-num"><div class="step-circle">4</div></div>
+          <div class="step-body">
+            <h3>
+              PIL Compositing
+              <span class="chip chip-purple">build_banner_frame</span>
+              <span class="chip chip-purple">build_bottom_banner_frame</span>
+              <span class="chip chip-purple">draw_discount_badge</span>
+            </h3>
+            <p>
+              Text and badges are composited onto the AI-generated backgrounds via Pillow:<br><br>
+              <strong>Top banner</strong> — headline text (<code>Arial Bold</code>, gold) with
+              semi-transparent rounded backing; gold circular badge geometry straddles the
+              banner / product-zone boundary (badge_cx, badge_cy returned for later use).<br><br>
+              <strong>Bottom banner</strong> — 2px gold separator line at top edge; offer bullets
+              distributed vertically with auto font-size; each bullet wrapped in a dark semi-transparent
+              rounded pill.
+            </p>
+            <div class="chips">
+              <span class="chip chip-gold">Output: banner_pil (top), bottom_banner_pil, badge params (cx, cy, r)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="pipeline-step">
+          <div class="step-connector"></div>
+          <div class="step-num"><div class="step-circle">5</div></div>
+          <div class="step-body">
+            <h3>
+              Frame Compositing
+              <span class="chip chip-purple">compose_frame</span>
+            </h3>
+            <p>
+              Per frame, the product image is resize-cropped to fill the middle zone
+              (<code>height − banner_height − bottom_height = 1230 px</code>), placed on a
+              black NumPy canvas, converted to PIL, then both banner PILs are
+              <code>.paste()</code>d at their fixed positions. The gold badge is drawn last
+              (so it overlaps the zone boundary). Returned as OpenCV BGR NumPy array.
+            </p>
+            <div class="chips">
+              <span class="chip chip-gold">Output: np.ndarray BGR (1080 × 1920 × 3)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 6 -->
+        <div class="pipeline-step">
+          <div class="step-num"><div class="step-circle">6</div></div>
+          <div class="step-body">
+            <h3>
+              Video Encoding
+              <span class="chip chip-red">cv2.VideoWriter</span>
+              <span class="chip chip-red">mp4v codec</span>
+            </h3>
+            <p>
+              For each image: <code>fps × duration</code> identical frames are written (static hold).
+              Between images: 25 transition frames are generated using a <em>smoothstep</em> ease
+              function — the product zone slides left while both banners are re-pasted at their
+              fixed screen positions on every blended frame (so they never move). The full sequence
+              repeats <code>num_loops</code> times.
+            </p>
+            <div class="chips">
+              <span class="chip chip-red">Transition easing: smoothstep t = 3t²−2t³</span>
+              <span class="chip chip-red">Output: .mp4 file on disk</span>
+            </div>
+            <div class="arrow-sub">
+              <span class="sub-icon">↳</span>
+              <p>Total frames ≈ (fps×duration + 25) × N_images × loops</p>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /pipeline -->
+    </div>
+  </section>
+
+
+  <!-- ───────────────────── 3. FRAME LAYOUT ───────────────────── -->
+  <section class="section" id="frame">
+    <div class="section-title"><span class="num">3</span> Frame Layout (1080 × 1920)</div>
+
+    <div class="card">
+      <div class="frame-diagram">
+
+        <div class="frame-visual">
+          <div class="frame-phone">
+            <div class="zone zone-top">TOP AI BANNER</div>
+            <div class="zone zone-product" style="position:relative;">
+              PRODUCT IMAGE
+              <div class="badge-dot">%</div>
+            </div>
+            <div class="zone zone-bottom">BOTTOM AI BANNER</div>
+          </div>
+          <p style="text-align:center;font-size:10px;color:var(--text-muted);margin-top:8px;">1080 × 1920 px</p>
+        </div>
+
+        <div class="frame-legend">
+
+          <div class="legend-row">
+            <div class="legend-swatch top"></div>
+            <div class="legend-text">
+              <h4>Top AI Banner — 18% (345 px)</h4>
+              <p>SDXL-generated dark navy background. PIL overlays: bold gold headline text
+              with rounded backing. Gold disc badge straddles the bottom edge of this zone
+              (centred at <code>badge_cy = banner_height</code>).</p>
+              <div class="chips" style="margin-top:6px;">
+                <span class="chip chip-blue">AI background</span>
+                <span class="chip chip-gold">PIL text overlay</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="legend-row">
+            <div class="legend-swatch mid"></div>
+            <div class="legend-text">
+              <h4>Product Zone — 64% (1230 px)</h4>
+              <p>Clean product image, resize-cropped to fill the zone width.
+              This zone is the <strong>only part that slides</strong> during transitions.
+              Centre-anchored crop preserves the focal point.</p>
+              <div class="chips" style="margin-top:6px;">
+                <span class="chip chip-purple">OpenCV crop + resize</span>
+                <span class="chip chip-green">Slides on transition</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="legend-row">
+            <div class="legend-swatch bot"></div>
+            <div class="legend-text">
+              <h4>Bottom AI Banner — 18% (345 px)</h4>
+              <p>Separate SDXL call with charcoal/gold-top-edge prompt. 2 px gold
+              separator line at top edge. PIL overlays: 2–3 offer bullet points distributed
+              evenly in vertical slots.</p>
+              <div class="chips" style="margin-top:6px;">
+                <span class="chip chip-blue">AI background</span>
+                <span class="chip chip-gold">PIL bullet text</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="legend-row">
+            <div class="legend-swatch badge"></div>
+            <div class="legend-text">
+              <h4>Discount Badge (optional)</h4>
+              <p>Concentric gold circles with inner highlight. Uses PIL ellipse + shadow.
+              Centred at the top/product boundary. Shows only if <code>discount &gt; 0</code>.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ───────────────────── 4. SERVICES ───────────────────── -->
+  <section class="section" id="services">
+    <div class="section-title"><span class="num">4</span> Service Modules</div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="svc-table">
+        <thead>
+          <tr>
+            <th style="width:22%">Module</th>
+            <th style="width:26%">File</th>
+            <th style="width:34%">Responsibility</th>
+            <th>Outputs</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="svc-name">BannerContentAgent</span></td>
+            <td><span class="svc-file">src/services/banner_content_agent.py</span></td>
+            <td class="svc-desc">Calls HF chat completions on 3 LLMs in order; falls back to regex phrase extraction. Returns structured JSON promotional copy.</td>
+            <td class="svc-out"><code>banner_headline</code><br><code>banner_tagline</code><br><code>offer_points[3]</code><br><code>badge_label</code></td>
+          </tr>
+          <tr>
+            <td><span class="svc-name">DescriptionBasedIconAgent</span></td>
+            <td><span class="svc-file">src/services/description_based_icon_agent.py</span></td>
+            <td class="svc-desc">Regex-based parser for discount %, product category, offer type, suggested icons, colour scheme, and template selection.</td>
+            <td class="svc-out"><code>discount_percent</code><br><code>product_type</code><br><code>color_scheme</code><br><code>template</code></td>
+          </tr>
+          <tr>
+            <td><span class="svc-name">DescriptionAgent</span></td>
+            <td><span class="svc-file">src/services/description_agent.py</span></td>
+            <td class="svc-desc">Utility for keyword extraction from free-text descriptions. Used internally by DescriptionBasedIconAgent.</td>
+            <td class="svc-out"><code>keywords[]</code></td>
+          </tr>
+          <tr>
+            <td><span class="svc-name">ImageGeneratorFactory</span></td>
+            <td><span class="svc-file">src/services/image_generator_factory.py</span></td>
+            <td class="svc-desc">Factory for image backends. Registers <code>sdxl-remote</code>, <code>flux-remote</code>, and optionally <code>hf-inference</code> at import time.</td>
+            <td class="svc-out"><code>ImageGenerator</code> instance</td>
+          </tr>
+          <tr>
+            <td><span class="svc-name">RemoteInferenceGenerator</span></td>
+            <td><span class="svc-file">src/services/remote_inference_generator.py</span></td>
+            <td class="svc-desc">Wraps <code>huggingface_hub.InferenceClient</code>. Supports <code>sdxl</code>, <code>flux-dev</code>, <code>flux-pro</code> model aliases. Auto-loads API key from config or <code>HF_TOKEN</code> env var.</td>
+            <td class="svc-out"><code>PIL.Image</code> or <code>None</code></td>
+          </tr>
+          <tr>
+            <td><span class="svc-name">HFInferenceGenerator</span></td>
+            <td><span class="svc-file">src/services/hf_free_generators.py</span></td>
+            <td class="svc-desc">Alternative free-tier HF inference client. Registered as <code>hf-inference</code> backend if import succeeds.</td>
+            <td class="svc-out"><code>PIL.Image</code> or <code>None</code></td>
+          </tr>
+          <tr>
+            <td><span class="svc-name">ImageGenerator</span></td>
+            <td><span class="svc-file">src/services/image_generator_base.py</span></td>
+            <td class="svc-desc">Abstract base class defining the <code>generate_image()</code> interface shared by all generator implementations.</td>
+            <td class="svc-out">Abstract base</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="info-box" style="margin-top:16px;">
+      <strong>Backend selection:</strong> Default is <code>sdxl-remote</code> (free tier, fast).
+      Switch to <code>flux-remote</code> for higher-quality outputs (requires HF Pro / credits).
+      <code>hf-inference</code> is the free alternative if the router is unavailable.
+    </div>
+  </section>
+
+
+  <!-- ───────────────────── 5. DATA FLOW ───────────────────── -->
+  <section class="section" id="dataflow">
+    <div class="section-title"><span class="num">5</span> Data Flow</div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="flow-table">
+        <thead>
+          <tr>
+            <th style="width:5%">#</th>
+            <th style="width:22%">Data Object</th>
+            <th style="width:22%">Producer</th>
+            <th style="width:22%">Consumer</th>
+            <th>Type / Format</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:var(--text-muted)">1</td>
+            <td><code>description</code></td>
+            <td>CLI arg</td>
+            <td>BannerContentAgent<br>DescriptionBasedIconAgent</td>
+            <td><code>str</code> — plain English</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted)">2</td>
+            <td><code>image_paths</code></td>
+            <td>CLI args / glob</td>
+            <td>generate_carousel()</td>
+            <td><code>List[Path]</code></td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted)">3</td>
+            <td><code>banner_content</code></td>
+            <td>BannerContentAgent</td>
+            <td>generate_banner_background<br>build_banner_frame</td>
+            <td><code>dict</code> — headline, tagline, offer_points, badge_label</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted)">4</td>
+            <td><code>discount</code></td>
+            <td>DescriptionBasedIconAgent</td>
+            <td>compose_frame<br>draw_discount_badge</td>
+            <td><code>int</code> — percentage (0 = no badge)</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted)">5</td>
+            <td><code>top_bg / bot_bg</code></td>
+            <td>RemoteInferenceGenerator</td>
+            <td>build_banner_frame<br>build_bottom_banner_frame</td>
+            <td><code>PIL.Image RGBA → RGB</code></td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted)">6</td>
+            <td><code>banner_pil</code></td>
+            <td>build_banner_frame()</td>
+            <td>compose_frame()</td>
+            <td><code>PIL.Image RGB</code> (1080 × 345)</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted)">7</td>
+            <td><code>bottom_banner_pil</code></td>
+            <td>build_bottom_banner_frame()</td>
+            <td>compose_frame()</td>
+            <td><code>PIL.Image RGB</code> (1080 × 345)</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted)">8</td>
+            <td><code>frame_np</code></td>
+            <td>compose_frame()</td>
+            <td>cv2.VideoWriter</td>
+            <td><code>np.ndarray uint8 BGR</code> (1080 × 1920 × 3)</td>
+          </tr>
+          <tr>
+            <td style="color:var(--text-muted)">9</td>
+            <td><code>output.mp4</code></td>
+            <td>cv2.VideoWriter</td>
+            <td>User / player</td>
+            <td>mp4v codec, 30 fps, 9:16 portrait</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <!-- ───────────────────── 6. FILE TREE ───────────────────── -->
+  <section class="section" id="filetree">
+    <div class="section-title"><span class="num">6</span> File Tree</div>
+
+    <div class="card code-block">
+      <pre>
+<span class="dir">video_editor_platform/</span>
+│
+├── <span class="main">generate_carousel_with_banners.py</span>    <span class="cmt">← main entrypoint</span>
+├── <span class="doc">generate_ai_banners_preserved_image.py</span>  <span class="cmt">← single-image static banner</span>
+├── <span class="cfg">setup.ps1</span>                                <span class="cmt">← Windows venv setup</span>
+├── <span class="cfg">setup.sh</span>                                 <span class="cmt">← Linux / macOS venv setup</span>
+├── <span class="doc">requirements.txt</span>
+│
+├── <span class="dir">config/</span>
+│   ├── <span class="cfg">config.json</span>                          <span class="cmt">← gitignored — real HF token lives here</span>
+│   ├── <span class="cfg">config.json.example</span>                  <span class="cmt">← committed placeholder template</span>
+│   ├── <span class="cfg">base.py</span>
+│   └── <span class="cfg">__init__.py</span>
+│
+├── <span class="dir">docs/</span>
+│   └── <span class="doc">architecture.html</span>                     <span class="cmt">← this file</span>
+│
+└── <span class="dir">src/</span>
+    ├── <span class="doc">__init__.py</span>
+    └── <span class="dir">services/</span>
+        ├── <span class="svc">banner_content_agent.py</span>              <span class="cmt">← LLM copy generation</span>
+        ├── <span class="svc">description_agent.py</span>                 <span class="cmt">← keyword extraction</span>
+        ├── <span class="svc">description_based_icon_agent.py</span>      <span class="cmt">← regex discount / product parser</span>
+        ├── <span class="svc">image_generator_base.py</span>              <span class="cmt">← abstract base</span>
+        ├── <span class="svc">image_generator_factory.py</span>           <span class="cmt">← backend registry</span>
+        ├── <span class="svc">remote_inference_generator.py</span>        <span class="cmt">← HF InferenceClient (SDXL / FLUX)</span>
+        ├── <span class="svc">hf_free_generators.py</span>               <span class="cmt">← free-tier HF fallback</span>
+        └── <span class="svc">__init__.py</span>
+</pre>
+    </div>
+  </section>
+
+
+  <!-- ───────────────────── 7. CONFIG ───────────────────── -->
+  <section class="section" id="config">
+    <div class="section-title"><span class="num">7</span> Configuration</div>
+
+    <div class="card-grid">
+      <div class="card">
+        <h4>📄 config/config.json</h4>
+        <div class="code-block" style="margin-top:12px;">
+<pre>{
+  <span class="key">"huggingface"</span>: {
+    <span class="key">"api_token"</span>: <span class="str">"hf_YOUR_TOKEN_HERE"</span>
+  },
+  <span class="key">"generation"</span>: {
+    <span class="key">"default_backend"</span>: <span class="str">"sdxl-remote"</span>,
+    <span class="key">"inference_steps"</span>: <span class="val">30</span>,
+    <span class="key">"guidance_scale"</span>:  <span class="val">3.0</span>
+  }
+}</pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>🔑 Token Resolution Order</h4>
+        <ul style="margin-top:8px;">
+          <li>1. <code>config/config.json</code> &nbsp;<em style="color:var(--text-muted)">(primary)</em></li>
+          <li>2. <code>HF_TOKEN</code> environment variable</li>
+          <li>3. Raises <code>ValueError</code> if neither found</li>
+        </ul>
+        <div class="warn-box">
+          <strong>⚠ Security:</strong> <code>config/config.json</code> is gitignored.
+          Copy <code>config.json.example</code> → <code>config.json</code> and paste your
+          real token. Never commit the real token.
+        </div>
+      </div>
+    </div>
+
+    <div class="card-grid" style="margin-top:16px;">
+      <div class="card">
+        <h4>🎛 Runtime Parameters</h4>
+        <table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px;">
+          <tr><th style="text-align:left;color:var(--text-muted);padding:4px 0;border-bottom:1px solid var(--border)">Parameter</th><th style="text-align:left;color:var(--text-muted);padding:4px 8px;border-bottom:1px solid var(--border)">Default</th><th style="text-align:left;color:var(--text-muted);padding:4px 0;border-bottom:1px solid var(--border)">Description</th></tr>
+          <tr><td style="padding:6px 0"><code>--backend</code></td><td style="padding:6px 8px;color:var(--gold-light)">sdxl-remote</td><td style="padding:6px 0;color:var(--text-muted)">AI image backend</td></tr>
+          <tr><td style="padding:6px 0"><code>--width</code></td><td style="padding:6px 8px;color:var(--gold-light)">1080</td><td style="padding:6px 0;color:var(--text-muted)">Frame width px</td></tr>
+          <tr><td style="padding:6px 0"><code>--height</code></td><td style="padding:6px 8px;color:var(--gold-light)">1920</td><td style="padding:6px 0;color:var(--text-muted)">Frame height px</td></tr>
+          <tr><td style="padding:6px 0"><code>--fps</code></td><td style="padding:6px 8px;color:var(--gold-light)">30</td><td style="padding:6px 0;color:var(--text-muted)">Frames per second</td></tr>
+          <tr><td style="padding:6px 0"><code>--duration</code></td><td style="padding:6px 8px;color:var(--gold-light)">4</td><td style="padding:6px 0;color:var(--text-muted)">Seconds per image</td></tr>
+          <tr><td style="padding:6px 0"><code>--loops</code></td><td style="padding:6px 8px;color:var(--gold-light)">2</td><td style="padding:6px 0;color:var(--text-muted)">Replay loops</td></tr>
+          <tr><td style="padding:6px 0"><code>--steps</code></td><td style="padding:6px 8px;color:var(--gold-light)">30</td><td style="padding:6px 0;color:var(--text-muted)">SDXL inference steps</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h4>🏗 Available Backends</h4>
+        <ul style="margin-top:8px;">
+          <li><code>sdxl-remote</code> — <strong style="color:var(--accent-green)">Free, fast</strong> ⭐ SDXL via HF Router</li>
+          <li style="margin-top:6px"><code>flux-remote</code> — FLUX.1-dev via HF Router <em style="color:var(--text-muted)">(requires credits)</em></li>
+          <li style="margin-top:6px"><code>hf-inference</code> — HF Inference API free tier <em style="color:var(--text-muted)">(optional dep)</em></li>
+        </ul>
+        <div class="info-box" style="margin-top:12px;">
+          <strong>Recommended:</strong> Use <code>sdxl-remote</code> — no GPU, no local model download, 
+          free tier, generates in ~10-20 s per banner.
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ───────────────────── 8. CLI REFERENCE ───────────────────── -->
+  <section class="section" id="cli">
+    <div class="section-title"><span class="num">8</span> CLI Reference</div>
+
+    <div class="cli-block">
+<pre>
+<span class="cmt"># Single run — explicit image paths</span>
+<span class="prompt">$</span> <span class="cmd">python generate_carousel_with_banners.py</span> \
+    <span class="val">"C:/input/jacket.jpg"</span> <span class="val">"C:/input/helmet.jpg"</span> \
+    <span class="flag">--description</span> <span class="val">"flat 20% off on motorcycle gear, customization available"</span> \
+    <span class="flag">--backend</span>     <span class="val">sdxl-remote</span> \
+    <span class="flag">--output</span>      <span class="val">"C:/output/carousel.mp4"</span>
+
+<span class="cmt"># Process all images in the input folder</span>
+<span class="prompt">$</span> <span class="cmd">python generate_carousel_with_banners.py</span> <span class="val">all</span> \
+    <span class="flag">--description</span> <span class="val">"summer sale 30% off on all sportswear"</span>
+
+<span class="cmt"># Custom resolution / timing</span>
+<span class="prompt">$</span> <span class="cmd">python generate_carousel_with_banners.py</span> \
+    <span class="val">"img1.jpg"</span> <span class="val">"img2.jpg"</span> <span class="val">"img3.jpg"</span> \
+    <span class="flag">--description</span> <span class="val">"buy 2 get 1 free on all electronics"</span> \
+    <span class="flag">--width</span>  <span class="val">1080</span>  <span class="flag">--height</span> <span class="val">1920</span> \
+    <span class="flag">--fps</span>    <span class="val">30</span>    <span class="flag">--duration</span> <span class="val">5</span>  <span class="flag">--loops</span> <span class="val">3</span> \
+    <span class="flag">--steps</span>  <span class="val">40</span>    <span class="flag">--backend</span>  <span class="val">flux-remote</span>
+</pre>
+    </div>
+
+    <div class="info-box" style="margin-top:16px;">
+      <strong>First-time setup:</strong>
+      Run <code>setup.ps1</code> (Windows) or <code>setup.sh</code> (Linux/macOS) to create the
+      <code>.venv</code>, install dependencies, and be prompted to configure your HF token.
+    </div>
+  </section>
+
+
+  <footer>
+    <span>Video Generation Pipeline · Architecture Document</span>
+    <span>Generated March 2026</span>
+  </footer>
+
+</div>
+</body>
+</html>

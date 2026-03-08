@@ -3,7 +3,6 @@
 import re
 from typing import Dict, List, Tuple
 from src.services.description_agent import DescriptionAgent
-from src.services.emo_g_agent import EmoGAgent
 
 
 class DescriptionBasedIconAgent:
@@ -208,24 +207,6 @@ class DescriptionBasedIconAgent:
             "accent": (255, 215, 0),
             "background": (0, 0, 0, 180),
         })
-
-    @staticmethod
-    def identify_offers_with_context(description: str) -> Dict:
-        """
-        Identify special offers and provide context for display.
-        
-        Returns:
-            Dict with offer details and recommended styling
-        """
-        offers = EmoGAgent.identify_special_offers(description)
-        offers_dict = {
-            "offers": offers,
-            "has_discount": "Discount" in offers,
-            "has_promotion": "Promotion" in offers,
-            "has_bundle": "Buy 1 Get 1" in offers,
-        }
-        
-        return offers_dict
 
     @staticmethod
     def _identify_offer_type(description_lower: str, keywords: List[str]) -> str:

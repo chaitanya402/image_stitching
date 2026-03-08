@@ -128,6 +128,21 @@ dmypy.json
 *.swp
 *.swo
 *~
+
+# Generated outputs — never commit videos/images produced by the pipeline
+output/
+output_images/
+*.mp4
+*.avi
+*.mov
+*.jpg
+*.jpeg
+*.png
+*.gif
+*_metadata.json
+
+# HuggingFace API token — keep private
+config/config.json
 .DS_Store
 
 # Project specific

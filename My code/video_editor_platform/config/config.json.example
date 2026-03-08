@@ -1,0 +1,10 @@
+{
+  "huggingface": {
+    "api_token": "hf_YOUR_TOKEN_HERE"
+  },
+  "image_generation": {
+    "default_backend": "sdxl-remote",
+    "inference_steps": 30,
+    "guidance_scale": 3.0
+  }
+}

@@ -9,6 +9,9 @@ from .image_generator_factory import ImageGeneratorFactory
 # Prompt Generation
 from .prompt_generator_agent import PromptGeneratorAgent
 
+# Agent Pipeline
+from .enhanced_prompt_image_agent import EnhancedPromptAndImageAgent
+
 # Existing services
 from .description_agent import DescriptionAgent
 from .description_based_icon_agent import DescriptionBasedIconAgent
@@ -19,6 +22,7 @@ __all__ = [
     "HuggingFaceInferenceGenerator",
     "ImageGeneratorFactory",
     "PromptGeneratorAgent",
+    "EnhancedPromptAndImageAgent",
     "DescriptionAgent",
     "DescriptionBasedIconAgent",
 ]

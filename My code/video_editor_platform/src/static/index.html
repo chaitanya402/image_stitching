@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>GenAI Video Editor — Upload</title>
+    <link rel="stylesheet" href="/ui/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Upload Images / Videos</h1>
+      <form id="uploadForm">
+        <label for="description">Product description (optional)</label><br />
+        <textarea id="description" name="description" rows="3" style="width:100%" placeholder="Describe your product"></textarea>
+        <div style="height:8px"></div>
+        <input type="file" id="files" name="files" multiple accept="image/*,video/*" />
+        <button type="submit">Upload</button>
+      </form>
+
+      <hr />
+      <h2>Edit Single Image</h2>
+      <div class="edit-section">
+        <div>
+          <label for="editDescription">Edit description (will be applied to image)</label><br />
+          <textarea id="editDescription" rows="2" style="width:100%" placeholder="Describe edit or product"></textarea>
+          <div style="height:6px"></div>
+          <input type="file" id="editImageFile" accept="image/*" />
+          <div style="height:6px"></div>
+          <button id="startCamera">Use Camera</button>
+          <button id="capture" disabled>Capture & Edit</button>
+        </div>
+
+        <div class="camera-area">
+          <video id="video" autoplay playsinline style="max-width:320px; display:none"></video>
+          <canvas id="canvas" style="display:none"></canvas>
+        </div>
+      </div>
+
+      <section id="result"></section>
+    </main>
+
+    <script src="/ui/app.js"></script>
+  </body>
+</html>

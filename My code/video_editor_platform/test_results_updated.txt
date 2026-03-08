@@ -1,0 +1,67 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.9.13, pytest-7.1.2, pluggy-1.0.0 -- /Users/chy/opt/anaconda3/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/chy/Desktop/My code/video_editor_platform, configfile: pytest.ini
+plugins: anyio-3.5.0
+collecting ... collected 39 items / 2 deselected / 37 selected
+
+tests/integration/test_integrations.py::TestAPIIntegration::test_health_endpoint SKIPPED (Could not initialize API client: No module named 'fastapi') [  2%]
+tests/integration/test_integrations.py::TestAPIIntegration::test_root_endpoint SKIPPED (Could not initialize API client: No module named 'fastapi') [  5%]
+tests/integration/test_integrations.py::TestConfigurationIntegration::test_local_setup_configuration SKIPPED (Configuration test skipped: No module named 'pydantic_settings') [  8%]
+tests/integration/test_integrations.py::TestConfigurationIntegration::test_sqlite_database_configuration SKIPPED (SQLite test skipped: No module named 'pydantic_settings') [ 10%]
+tests/integration/test_integrations.py::TestFileUploadWorkflow::test_sample_video_creation PASSED [ 13%]
+tests/integration/test_integrations.py::TestFileUploadWorkflow::test_temp_directory_structure PASSED [ 16%]
+tests/integration/test_integrations.py::TestDependencyIntegration::test_numpy_and_opencv_integration SKIPPED (NumPy+OpenCV test skipped: No module named 'cv2') [ 18%]
+tests/integration/test_integrations.py::TestDependencyIntegration::test_audio_libraries_integration SKIPPED (Audio library test skipped: No module named 'librosa') [ 21%]
+tests/integration/test_integrations.py::TestDependencyIntegration::test_pyttsx3_initialization SKIPPED (pyttsx3 test skipped: No module named 'pyttsx3') [ 24%]
+tests/integration/test_integrations.py::TestLocalModelsAvailability::test_ollama_configuration SKIPPED (Ollama config test skipped: No module named 'pydantic_settings') [ 27%]
+tests/integration/test_integrations.py::TestLocalModelsAvailability::test_pyttsx3_available_without_api SKIPPED (pyttsx3 API test skipped: No module named 'pyttsx3') [ 29%]
+tests/integration/test_integrations.py::TestDatabaseSetup::test_sqlite_database_creation PASSED [ 32%]
+tests/integration/test_integrations.py::TestDatabaseSetup::test_in_memory_database PASSED [ 35%]
+tests/integration/test_integrations.py::TestProjectStructure::test_package_imports SKIPPED (Package import skipped: No module named 'pydantic_settings') [ 37%]
+tests/integration/test_integrations.py::TestProjectStructure::test_fastapi_app_structure SKIPPED (FastAPI not available - skipping app structure test) [ 40%]
+tests/integration/test_integrations.py::TestIntegrationSummary::test_all_integrations_passed PASSED [ 43%]
+tests/unit/test_core_setup.py::TestConfiguration::test_config_loading PASSED [ 45%]
+tests/unit/test_core_setup.py::TestConfiguration::test_config_defaults SKIPPED (Config test skipped: No module named 'pydantic_settings') [ 48%]
+tests/unit/test_core_setup.py::TestConfiguration::test_database_url_parsing SKIPPED (Database URL test skipped: No module named 'pydantic_settings') [ 51%]
+tests/unit/test_core_setup.py::TestConfiguration::test_local_models_config SKIPPED (Local models config test skipped: No module named 'pydantic_settings') [ 54%]
+tests/unit/test_core_setup.py::TestFileValidation::test_max_file_size_validation PASSED [ 56%]
+tests/unit/test_core_setup.py::TestFileValidation::test_video_format_validation SKIPPED (Video format test skipped: No module named 'pydantic_settings') [ 59%]
+tests/unit/test_core_setup.py::TestFileValidation::test_invalid_file_rejection SKIPPED (Invalid file test skipped: No module named 'pydantic_settings') [ 62%]
+tests/unit/test_core_setup.py::TestFileValidation::test_file_path_validation PASSED [ 64%]
+tests/unit/test_core_setup.py::TestAPIConfiguration::test_fastapi_app_creation SKIPPED (Could not initialize API client: No module named 'fastapi') [ 67%]
+tests/unit/test_core_setup.py::TestAPIConfiguration::test_cors_configuration SKIPPED (Could not initialize API client: No module named 'fastapi') [ 70%]
+tests/unit/test_core_setup.py::TestAPIConfiguration::test_gzip_middleware SKIPPED (Could not initialize API client: No module named 'fastapi') [ 72%]
+tests/unit/test_core_setup.py::TestAPIConfiguration::test_root_endpoint SKIPPED (Could not initialize API client: No module named 'fastapi') [ 75%]
+tests/unit/test_core_setup.py::TestEnvironmentSetup::test_required_packages_available SKIPPED (Missing packages (OK for local testing): ['fastapi', 'uvicorn', 'pydantic', 'cv2', 'librosa', 'pydub']) [ 78%]
+tests/unit/test_core_setup.py::TestEnvironmentSetup::test_ffmpeg_installation SKIPPED (FFmpeg not installed - this is OK for unit tests) [ 81%]
+tests/unit/test_core_setup.py::TestEnvironmentSetup::test_local_models_not_requiring_api_keys SKIPPED (pyttsx3 not installed - skipping TTS test) [ 83%]
+tests/unit/test_core_setup.py::TestDirectoryStructure::test_source_directories_exist PASSED [ 86%]
+tests/unit/test_core_setup.py::TestDirectoryStructure::test_test_directories_exist PASSED [ 89%]
+tests/unit/test_core_setup.py::TestDirectoryStructure::test_documentation_exists PASSED [ 91%]
+tests/unit/test_core_setup.py::TestLogging::test_logger_creation PASSED  [ 94%]
+tests/unit/test_core_setup.py::TestLogging::test_log_levels FAILED       [ 97%]
+tests/unit/test_core_setup.py::TestRegressionSummary::test_all_critical_components_initialized FAILED [100%]
+
+=================================== FAILURES ===================================
+_________________________ TestLogging.test_log_levels __________________________
+tests/unit/test_core_setup.py:300: in test_log_levels
+    from config.base import Settings
+config/base.py:5: in <module>
+    from pydantic_settings import BaseSettings
+E   ModuleNotFoundError: No module named 'pydantic_settings'
+________ TestRegressionSummary.test_all_critical_components_initialized ________
+tests/unit/test_core_setup.py:318: in test_all_critical_components_initialized
+    from config.base import Settings
+config/base.py:5: in <module>
+    from pydantic_settings import BaseSettings
+E   ModuleNotFoundError: No module named 'pydantic_settings'
+
+During handling of the above exception, another exception occurred:
+tests/unit/test_core_setup.py:333: in test_all_critical_components_initialized
+    pytest.fail(f"Critical component initialization failed: {e}")
+E   Failed: Critical component initialization failed: No module named 'pydantic_settings'
+=========================== short test summary info ============================
+FAILED tests/unit/test_core_setup.py::TestLogging::test_log_levels - ModuleNo...
+FAILED tests/unit/test_core_setup.py::TestRegressionSummary::test_all_critical_components_initialized
+============ 2 failed, 12 passed, 23 skipped, 2 deselected in 1.67s ============
